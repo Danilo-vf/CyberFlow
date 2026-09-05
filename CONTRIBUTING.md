@@ -6,9 +6,11 @@
 - Ao terminar, abra um Pull Request para a `main`.
 - O PR só pode ser mesclado após aprovação de pelo menos 1 revisor (e, futuramente, após a pipeline passar).
 
+
 ## Padrão de nomes de branch
 - feature/nome-da-tarefa
 - fix/nome-do-bug
+
 
 ## Padrão de commits
 Use prefixos para identificar o tipo de alteração:
