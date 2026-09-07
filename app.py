@@ -1,12 +1,14 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
+import unicodedata
 from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)  # permite que o frontend (outra origem/porta) chame essa API
 
 DB_NAME = "cyberflow.db"
+STATUS_VALIDOS = ["Aberto", "Em Análise", "Resolvido"]
 
 
 def get_db_connection():
@@ -65,6 +67,33 @@ def listar_incidentes():
     incidentes = conn.execute("SELECT * FROM incidentes ORDER BY id DESC").fetchall()
     conn.close()
     return jsonify([dict(i) for i in incidentes]), 200
+
+
+@app.route("/incidentes/<int:id>/status", methods=["PATCH"])
+def atualizar_status(id):
+    dados = request.get_json(silent=True)
+    novo_status = dados.get("status") if dados else None
+
+    if novo_status:
+        novo_status = unicodedata.normalize("NFC", novo_status)
+
+    if not novo_status or novo_status not in STATUS_VALIDOS:
+        return jsonify({
+            "erro": f"Status inválido. Use um dos: {', '.join(STATUS_VALIDOS)}"
+        }), 400
+
+    conn = get_db_connection()
+    incidente = conn.execute("SELECT * FROM incidentes WHERE id = ?", (id,)).fetchone()
+
+    if incidente is None:
+        conn.close()
+        return jsonify({"erro": "Incidente não encontrado"}), 404
+
+    conn.execute("UPDATE incidentes SET status = ? WHERE id = ?", (novo_status, id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"id": id, "status": novo_status}), 200
 
 
 if __name__ == "__main__":
