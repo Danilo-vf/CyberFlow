@@ -2,12 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  test:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
@@ -18,10 +17,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Instalar dependências
+      - name: Build (instalar dependências)
         run: pip install -r requirements.txt
 
       - name: Rodar testes
-        run: pytest
         env:
           PYTHONPATH: .
+        run: pytest
