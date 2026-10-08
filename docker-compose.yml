@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      PYTHONPATH: /app
+    working_dir: /data
+    volumes:
+      - db-data:/data
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./app.js:/usr/share/nginx/html/app.js:ro
+      - ./style.css:/usr/share/nginx/html/style.css:ro
+    depends_on:
+      - backend
+
+volumes:
+  db-data:
