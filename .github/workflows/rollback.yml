@@ -1,0 +1,66 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: 'Versão para restaurar (ex: 1.0.0, sem o "v")'
+        required: true
+        type: string
+      promover_latest:
+        description: 'Apontar a tag latest para essa versão?'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    env:
+      VERSAO: ${{ inputs.versao }}
+      IMAGEM: ${{ secrets.DOCKERHUB_USERNAME }}/cyberflow-backend
+    steps:
+      - name: Validar formato da versão
+        run: |
+          if ! [[ "$VERSAO" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Versão inválida. Use o formato 1.0.0 (sem o v)."
+            exit 1
+          fi
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Confirmar que a versão existe no Docker Hub
+        run: |
+          if ! docker manifest inspect "$IMAGEM:$VERSAO" > /dev/null; then
+            echo "A tag $VERSAO não existe no Docker Hub. Rollback cancelado."
+            exit 1
+          fi
+
+      - name: Subir a versão anterior
+        run: |
+          docker pull "$IMAGEM:$VERSAO"
+          docker run -d --name cyberflow-backend -p 5000:5000 -e PYTHONPATH=/app -w /data "$IMAGEM:$VERSAO"
+
+      - name: Verificar se a API respondeu
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fs http://localhost:5000/incidentes; then
+              echo "Rollback simulado OK"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker logs cyberflow-backend
+          exit 1
+
+      - name: Promover a versão para latest
+        if: ${{ inputs.promover_latest }}
+        run: docker buildx imagetools create -t "$IMAGEM:latest" "$IMAGEM:$VERSAO"
+
+      - name: Resumo
+        if: ${{ success() }}
+        run: echo "Rollback concluído: versão $VERSAO restaurada." >> "$GITHUB_STEP_SUMMARY"

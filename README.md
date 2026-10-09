@@ -196,3 +196,7 @@ Mais detalhes em [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 | Guilherme Borges | Backend e banco de dados |
 | Filipe Portela | Frontend |
 | Caio Peryco | Qualidade/QA — testes automatizados |
+
+## Versionamento e Rollback
+
+As imagens Docker usam versionamento semântico (tags `vX.Y.Z`) e são publicadas no Docker Hub pelo pipeline de CD. Para reverter para uma versão anterior, use o workflow **Rollback** na aba Actions. O passo a passo está em [docs/ROLLBACK.md](docs/ROLLBACK.md).
