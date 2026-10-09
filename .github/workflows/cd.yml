@@ -23,3 +23,24 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/cyberflow-backend:latest
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar a imagem publicada e subir o backend
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/cyberflow-backend:latest
+          docker run -d --name cyberflow-backend -p 5000:5000 -e PYTHONPATH=/app -w /data ${{ secrets.DOCKERHUB_USERNAME }}/cyberflow-backend:latest
+
+      - name: Verificar se a API respondeu
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fs http://localhost:5000/incidentes; then
+              echo "Deploy simulado OK"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker logs cyberflow-backend
+          exit 1
