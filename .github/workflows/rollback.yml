@@ -63,4 +63,5 @@ jobs:
 
       - name: Resumo
         if: ${{ success() }}
-        run: echo "Rollback concluído: versão $VERSAO restaurada." >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Rollback concluído: versão $VERSAO restaurada." >> "$GITHUB_STEP_SUMMARY"
