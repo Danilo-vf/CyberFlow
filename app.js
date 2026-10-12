@@ -1,4 +1,4 @@
-const API_URL = 'http://127.0.0.1:5000/incidentes';
+const API_URL = '/api/incidentes'; 
 
 const form = document.getElementById('incident-form');
 const tableBody = document.getElementById('table-body');
@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', listarIncidentes);
 
 async function listarIncidentes() {
     try {
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Carregando incidentes...</td></tr>';
+        
         const response = await fetch(API_URL);
         if (!response.ok) throw new Error('Erro ao buscar incidentes');
         
@@ -15,14 +17,13 @@ async function listarIncidentes() {
         renderizarTabela(incidentes);
     } catch (error) {
         console.error(error);
-        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Erro ao carregar os dados.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Erro ao carregar os dados. O servidor pode estar inicializando.</td></tr>';
     }
 }
 
 async function salvarIncidente(e) {
     e.preventDefault();
 
-    // Removemos o campo status daqui, o backend cuida de forçar "Aberto"
     const payload = {
         titulo: document.getElementById('titulo').value,
         categoria: document.getElementById('categoria').value,
@@ -49,7 +50,6 @@ async function salvarIncidente(e) {
     }
 }
 
-// Nova função para a rota PATCH
 async function atualizarStatus(id, novoStatus) {
     if (!novoStatus) return;
 
@@ -65,11 +65,11 @@ async function atualizarStatus(id, novoStatus) {
             throw new Error(errData.erro || 'Erro ao atualizar status');
         }
 
-        listarIncidentes(); // Recarrega a tabela para atualizar a cor do badge
+        listarIncidentes(); 
     } catch (error) {
         console.error(error);
         alert(`Erro ao mudar status: ${error.message}`);
-        listarIncidentes(); // Volta a tabela ao estado original se der erro
+        listarIncidentes(); 
     }
 }
 
@@ -94,7 +94,6 @@ function renderizarTabela(incidentes) {
             </td>
             <td><span class="badge badge-${statusClass}">${incidente.status}</span></td>
             <td>
-                <!-- Chama o PATCH automaticamente ao mudar o valor -->
                 <select class="status-select" onchange="atualizarStatus(${incidente.id}, this.value)">
                     <option value="" disabled selected>Alterar status...</option>
                     <option value="Aberto">Aberto</option>
