@@ -13,7 +13,6 @@
     </header>
 
     <div class="container">
-        <!-- Coluna Esquerda: Formulário -->
         <aside class="panel form-panel">
             <h2 id="form-title">Registrar Incidente</h2>
             <form id="incident-form">
@@ -26,13 +25,13 @@
                     <label for="categoria">Categoria (Tipo de Ataque)</label>
                     <input type="text" id="categoria" name="categoria" required placeholder="Ex: Phishing, Ransomware..." list="lista-categorias">
                     <datalist id="lista-categorias">
-                        <option value="Phishing">
-                        <option value="Ransomware">
-                        <option value="Malware">
-                        <option value="DDoS">
-                        <option value="Vazamento de Dados">
-                        <option value="Engenharia Social">
-                        <option value="Acesso Indevido">
+                        <option value="Phishing"></option>
+                        <option value="Ransomware"></option>
+                        <option value="Malware"></option>
+                        <option value="DDoS"></option>
+                        <option value="Vazamento de Dados"></option>
+                        <option value="Engenharia Social"></option>
+                        <option value="Acesso Indevido"></option>
                     </datalist>
                 </div>
 
@@ -47,7 +46,6 @@
             </form>
         </aside>
 
-        <!-- Coluna Direita: Tabela -->
         <main class="panel table-panel">
             <h2>Painel de Incidentes</h2>
             <div class="table-responsive">
@@ -63,12 +61,15 @@
                         </tr>
                     </thead>
                     <tbody id="table-body">
-                        <!-- Os dados serão injetados aqui via JavaScript -->
                     </tbody>
                 </table>
             </div>
         </main>
     </div>
+
+    <footer style="text-align: center; margin-top: 2rem; padding: 1rem; color: #666; font-size: 0.875rem;">
+        CyberFlow - Plataforma de Gestão de Incidentes | <span id="app-version" style="font-weight: bold;">Versão: 1.0.0</span>
+    </footer>
 
     <script src="app.js"></script>
 </body>
