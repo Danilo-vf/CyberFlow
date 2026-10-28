@@ -1,27 +1,98 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import os
 import sqlite3
+import time
 import unicodedata
 from datetime import datetime
 
-app = Flask(__name__)
-CORS(app)  # permite que o frontend (outra origem/porta) chame essa API
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-DB_NAME = "cyberflow.db"
+app = Flask(__name__)
+
+# ---------------------------------------------------------------------------
+# Configuração: tudo vem de variáveis de ambiente, nada de credencial no código.
+#
+#   DB_HOST            -> se definido, usa PostgreSQL (ambiente Docker/deploy)
+#   DB_PORT            -> porta do Postgres (padrão 5432)
+#   POSTGRES_DB        -> nome do banco        (obrigatória com DB_HOST)
+#   POSTGRES_USER      -> usuário do banco     (obrigatória com DB_HOST)
+#   POSTGRES_PASSWORD  -> senha do banco       (obrigatória com DB_HOST)
+#   SQLITE_PATH        -> arquivo SQLite usado SEM DB_HOST (dev local e testes)
+#   CORS_ORIGINS       -> origens permitidas, separadas por vírgula (padrão "*")
+#   HOST / PORT        -> endereço e porta do servidor (padrão 127.0.0.1:5000)
+#   FLASK_DEBUG        -> "1" liga o modo debug (padrão desligado)
+# ---------------------------------------------------------------------------
+CORS(app, origins=os.environ.get("CORS_ORIGINS", "*").split(","))
+
+DB_NAME = os.environ.get("SQLITE_PATH", "cyberflow.db")
 STATUS_VALIDOS = ["Aberto", "Em Análise", "Resolvido"]
 
 
+def usar_postgres():
+    return bool(os.environ.get("DB_HOST"))
+
+
+def _config_postgres():
+    obrigatorias = ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD")
+    faltando = [v for v in obrigatorias if not os.environ.get(v)]
+    if faltando:
+        raise RuntimeError(
+            "Variáveis de ambiente ausentes: " + ", ".join(faltando)
+        )
+    return {
+        "host": os.environ["DB_HOST"],
+        "port": int(os.environ.get("DB_PORT", "5432")),
+        "dbname": os.environ["POSTGRES_DB"],
+        "user": os.environ["POSTGRES_USER"],
+        "password": os.environ["POSTGRES_PASSWORD"],
+    }
+
+
 def get_db_connection():
+    if usar_postgres():
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+
+        return psycopg2.connect(cursor_factory=RealDictCursor, **_config_postgres())
+
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
 
 
+def executar(conn, sql, params=()):
+    """Executa SQL escrito com '?' tanto no SQLite quanto no PostgreSQL."""
+    if usar_postgres():
+        cursor = conn.cursor()
+        cursor.execute(sql.replace("?", "%s"), params)
+        return cursor
+    return conn.execute(sql, params)
+
+
+def conectar_com_retry(tentativas=10, espera=2):
+    """No Docker o Postgres pode demorar a ficar pronto; tenta de novo."""
+    if not usar_postgres():
+        return get_db_connection()
+
+    import psycopg2
+
+    for tentativa in range(1, tentativas + 1):
+        try:
+            return get_db_connection()
+        except psycopg2.OperationalError:
+            if tentativa == tentativas:
+                raise
+            time.sleep(espera)
+
+
 def init_db():
-    conn = get_db_connection()
-    conn.execute("""
+    chave_primaria = (
+        "SERIAL PRIMARY KEY" if usar_postgres() else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    )
+    conn = conectar_com_retry()
+    executar(conn, f"""
         CREATE TABLE IF NOT EXISTS incidentes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {chave_primaria},
             titulo TEXT NOT NULL,
             categoria TEXT NOT NULL,
             descricao TEXT,
@@ -43,12 +114,14 @@ def criar_incidente():
     data_hora = dados.get("data_hora", datetime.now().isoformat(timespec="seconds"))
 
     conn = get_db_connection()
-    cursor = conn.execute(
-        "INSERT INTO incidentes (titulo, categoria, descricao, data_hora, status) VALUES (?, ?, ?, ?, ?)",
+    cursor = executar(
+        conn,
+        "INSERT INTO incidentes (titulo, categoria, descricao, data_hora, status) "
+        "VALUES (?, ?, ?, ?, ?) RETURNING id",
         (dados["titulo"], dados["categoria"], dados.get("descricao", ""), data_hora, "Aberto"),
     )
+    novo_id = cursor.fetchone()["id"]
     conn.commit()
-    novo_id = cursor.lastrowid
     conn.close()
 
     return jsonify({
@@ -64,7 +137,7 @@ def criar_incidente():
 @app.route("/incidentes", methods=["GET"])
 def listar_incidentes():
     conn = get_db_connection()
-    incidentes = conn.execute("SELECT * FROM incidentes ORDER BY id DESC").fetchall()
+    incidentes = executar(conn, "SELECT * FROM incidentes ORDER BY id DESC").fetchall()
     conn.close()
     return jsonify([dict(i) for i in incidentes]), 200
 
@@ -83,13 +156,13 @@ def atualizar_status(id):
         }), 400
 
     conn = get_db_connection()
-    incidente = conn.execute("SELECT * FROM incidentes WHERE id = ?", (id,)).fetchone()
+    incidente = executar(conn, "SELECT * FROM incidentes WHERE id = ?", (id,)).fetchone()
 
     if incidente is None:
         conn.close()
         return jsonify({"erro": "Incidente não encontrado"}), 404
 
-    conn.execute("UPDATE incidentes SET status = ? WHERE id = ?", (novo_status, id))
+    executar(conn, "UPDATE incidentes SET status = ? WHERE id = ?", (novo_status, id))
     conn.commit()
     conn.close()
 
@@ -98,4 +171,8 @@ def atualizar_status(id):
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, port=5000) 
+    app.run(
+        host=os.environ.get("HOST", "127.0.0.1"),
+        port=int(os.environ.get("PORT", "5000")),
+        debug=os.environ.get("FLASK_DEBUG") == "1",
+    )
