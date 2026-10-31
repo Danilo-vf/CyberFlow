@@ -1,13 +1,34 @@
+# As credenciais vêm do arquivo .env (copie de .env.example).
+# O .env não é versionado; no deploy, use Secrets.
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?defina no .env}
+      POSTGRES_USER: ${POSTGRES_USER:?defina no .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build: .
     ports:
       - "5000:5000"
     environment:
+      DB_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:?defina no .env}
+      POSTGRES_USER: ${POSTGRES_USER:?defina no .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+      CORS_ORIGINS: http://localhost:8080
       PYTHONPATH: /app
-    working_dir: /data
-    volumes:
-      - db-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     image: nginx:alpine
@@ -22,4 +43,4 @@ services:
       - backend
 
 volumes:
-  db-data:
+  pg-data:
