@@ -7,8 +7,9 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-app = Flask(__name__)
+from patterns.prototype import catalogo_prototipos
 
+app = Flask(__name__)
 # ---------------------------------------------------------------------------
 # Configuração: tudo vem de variáveis de ambiente, nada de credencial no código.
 #
@@ -23,7 +24,6 @@ app = Flask(__name__)
 #   FLASK_DEBUG        -> "1" liga o modo debug (padrão desligado)
 # ---------------------------------------------------------------------------
 CORS(app, origins=os.environ.get("CORS_ORIGINS", "*").split(","))
-
 DB_NAME = os.environ.get("SQLITE_PATH", "cyberflow.db")
 STATUS_VALIDOS = ["Aberto", "Em Análise", "Resolvido"]
 
@@ -75,7 +75,6 @@ def conectar_com_retry(tentativas=10, espera=2):
         return get_db_connection()
 
     import psycopg2
-
     for tentativa in range(1, tentativas + 1):
         try:
             return get_db_connection()
@@ -112,7 +111,6 @@ def criar_incidente():
         return jsonify({"erro": "Campos 'titulo' e 'categoria' são obrigatórios"}), 400
 
     data_hora = dados.get("data_hora", datetime.now().isoformat(timespec="seconds"))
-
     conn = get_db_connection()
     cursor = executar(
         conn,
@@ -123,7 +121,6 @@ def criar_incidente():
     novo_id = cursor.fetchone()["id"]
     conn.commit()
     conn.close()
-
     return jsonify({
         "id": novo_id,
         "titulo": dados["titulo"],
@@ -142,6 +139,66 @@ def listar_incidentes():
     return jsonify([dict(i) for i in incidentes]), 200
 
 
+@app.route("/modelos-incidente", methods=["GET"])
+def listar_modelos_incidente():
+    """Retorna os protótipos disponíveis para clonagem."""
+    return jsonify(catalogo_prototipos.listar()), 200
+
+
+@app.route("/incidentes/modelos/<string:modelo_id>/clonar", methods=["POST"])
+def clonar_modelo_incidente(modelo_id):
+    """Clona um modelo e salva o novo incidente no banco de dados."""
+    dados = request.get_json(silent=True)
+    if dados is None:
+        dados = {}
+    if not isinstance(dados, dict):
+        return jsonify({"erro": "O corpo da requisição deve ser um objeto JSON"}), 400
+
+    titulo = dados.get("titulo")
+    descricao = dados.get("descricao")
+
+    if titulo is not None and (not isinstance(titulo, str) or not titulo.strip()):
+        return jsonify({"erro": "O título personalizado não pode ficar vazio"}), 400
+    if descricao is not None and not isinstance(descricao, str):
+        return jsonify({"erro": "A descrição personalizada deve ser um texto"}), 400
+
+    try:
+        incidente = catalogo_prototipos.clonar(
+            modelo_id,
+            titulo=titulo,
+            descricao=descricao,
+        )
+    except KeyError:
+        return jsonify({"erro": "Modelo de incidente não encontrado"}), 404
+
+    data_hora = dados.get("data_hora", datetime.now().isoformat(timespec="seconds"))
+    conn = get_db_connection()
+    cursor = executar(
+        conn,
+        "INSERT INTO incidentes (titulo, categoria, descricao, data_hora, status) "
+        "VALUES (?, ?, ?, ?, ?) RETURNING id",
+        (
+            incidente.titulo,
+            incidente.categoria,
+            incidente.descricao,
+            data_hora,
+            "Aberto",
+        ),
+    )
+    novo_id = cursor.fetchone()["id"]
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "id": novo_id,
+        "titulo": incidente.titulo,
+        "categoria": incidente.categoria,
+        "descricao": incidente.descricao,
+        "data_hora": data_hora,
+        "status": "Aberto",
+    }), 201
+
+
 @app.route("/incidentes/<int:id>/status", methods=["PATCH"])
 def atualizar_status(id):
     dados = request.get_json(silent=True)
@@ -154,7 +211,6 @@ def atualizar_status(id):
         return jsonify({
             "erro": f"Status inválido. Use um dos: {', '.join(STATUS_VALIDOS)}"
         }), 400
-
     conn = get_db_connection()
     incidente = executar(conn, "SELECT * FROM incidentes WHERE id = ?", (id,)).fetchone()
 
