@@ -24,3 +24,9 @@ jobs:
         env:
           PYTHONPATH: .
         run: pytest
+    
+      - name: Build da imagem Docker
+        run: docker build -t cyberflow-backend .
+
+      - name: Conferir que o app inicia na imagem
+        run: docker run --rm cyberflow-backend python -c "import app"
